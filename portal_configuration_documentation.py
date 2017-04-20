@@ -1,7 +1,11 @@
 #! /usr/local/bin/python
 
 # Author: Sean Nicholson
-# Script for exporting Halo API information for documenting a customer's portal
+# Script for exporting Halo API information for documenting a Halo portal
+# Version: 1.1
+# Date: 04/20/2017
+# ############################################################################
+
 
 import json, io
 import cloudpassage
@@ -17,7 +21,6 @@ def create_api_session(session):
     config_file_loc = "cloudpassage.yml"
     config_info = cloudpassage.ApiKeyManager(config_file=config_file_loc)
     session = cloudpassage.HaloSession(config_info.key_id, config_info.secret_key)
-
     return session
 
 def list_groups(session):
@@ -118,23 +121,9 @@ def list_groups(session):
 
             row="{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format(str(group_details['name']).encode('utf-8').strip(), str(group_details['tag']).encode('utf-8').strip(),str(group_parent_name).encode('utf-8').strip(), str(group_details['has_children']).encode('utf-8').strip(), fw_policies_details, csm_policies_details, fim_policies_details, lids_policies_details, alert_profile_details, se_policies_details)
             outfile.write(row)
+        print "Processing of Groups Data Complete"
         outfile.close()
-        #group_format = json.dumps(list_of_groups, indent=4,sort_keys=False, separators=(',',':'))
-        #outfile.write(to_unicode(group_format))
 
-def list_groups2 (session):
-    list_of_group_details = {}
-    groups2 = cloudpassage.HttpHelper(session)
-    groups2_list = json.loads(groups2.get("/v2/groups"))
-    for eachGroup in groups2_list:
-        #print
-        groupID = eachGroup['id']
-        print groupID
-        group2_details = groups2.get("/v2/groups/" + groupID)
-        list_of_group_details = list_of_group_details + group2_details
-    with open('groups2.txt', 'w') as outfile:
-        group2_format = json.dumps(list_of_group_details, indent=4,sort_keys=False, separators=(',',':'))
-        outfile.write(to_unicode(group2_format))
 
 def get_users(session):
     users = cloudpassage.HttpHelper(session)
@@ -161,14 +150,73 @@ def get_users(session):
 
 
 
+def policies_csv(session):
+    get_policies = cloudpassage.HttpHelper(session)
+    list_of_csm_policies = get_policies.get_paginated("/v1/policies", "policies", 10)
+    list_of_lids_policies = get_policies.get_paginated("/v1/lids_policies", "lids_policies", 10)
+    list_of_fim_policies = get_policies.get_paginated("/v1/fim_policies", "fim_policies", 10)
+    total_policies = len(list_of_csm_policies) + len(list_of_lids_policies) + len(list_of_fim_policies)
+    policy_counter = 1
+    with open('policies.csv', 'w') as outfile3:
+        outfile3.write("Policy Type,Policy Name,Platform,Group Owner,Shared,Used By, Created by,Created,Updated by,Updated\n")
+        print "Processing Policies"
+        for policy in list_of_csm_policies:
+            print "Processing Policy {0} of {1}".format(policy_counter, total_policies)
+            policy_counter += 1
+            used_by_group =""
+            if "used_by" in policy:
+                policy_applied_groups = policy['used_by']
+                for policy_group in policy_applied_groups:
+                    used_by_group += policy_group['name'] + ";"
+            row = "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format(policy['module'], policy['name'].replace(",",""), policy['platform'], policy['group_name'], policy['shared'], used_by_group, policy['created_by'], policy['created_at'], policy['updated_by'], policy['updated_at']  )
+            outfile3.write(row)
+        for policy in list_of_lids_policies:
+            print "Processing Policy {0} of {1}".format(policy_counter, total_policies)
+            policy_counter += 1
+            used_by_group =""
+            if "used_by" in policy:
+                policy_applied_groups = policy['used_by']
+                for policy_group in policy_applied_groups:
+                    used_by_group += policy_group['name'] + ";"
+            row = "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format(policy['module'], policy['name'].replace(",","").encode('utf-8').strip(), policy['platform'], policy['group_name'].encode('utf-8').strip(), policy['shared'], used_by_group.encode('utf-8').strip(), policy['created_by'].encode('utf-8').strip(), policy['created_at'].encode('utf-8').strip(), policy['updated_by'].encode('utf-8').strip(), policy['updated_at'].encode('utf-8').strip()  )
+            outfile3.write(row)
+        for policy in list_of_fim_policies:
+            print "Processing Policy {0} of {1}".format(policy_counter, total_policies)
+            policy_counter += 1
+            used_by_group =""
+            if "used_by" in policy:
+                policy_applied_groups = policy['used_by']
+                for policy_group in policy_applied_groups:
+                    used_by_group += policy_group['name'] + ";"
+            row = "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format(policy['module'], policy['name'].replace(",",""), policy['platform'], policy['group_name'], policy['shared'], used_by_group, policy['created_by'], policy['created_at'], policy['updated_by'], policy['updated_at']  )
+            outfile3.write(row)
+    print "Policy processing complete"
+    outfile3.close()
+
+def alert_profiles_csv(session):
+    get_policies = cloudpassage.HttpHelper(session)
+    list_of_alert_profiles = get_policies.get_paginated("/v1/alert_profiles", "alert_profiles", 10)
+    with open('alert_profiles.csv', 'w') as outfile4:
+        outfile4.write("Policy Name,Alert Frequency,Group Owner,Shared,Used By,Created by,Created,Updated by,Updated\n")
+        print "Processing Alert Profiles"
+        for policy in list_of_alert_profiles:
+            used_by_group =""
+            if "used_by" in policy:
+                policy_applied_groups = policy['used_by']
+                for policy_group in policy_applied_groups:
+                    used_by_group += policy_group['name'] + ";"
+            row = "{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format(policy['name'].replace(",",""), policy['frequency'], policy['group_name'], policy['shared'], used_by_group, policy['created_by'], policy['created_at'], policy['updated_by'], policy['updated_at']  )
+            outfile4.write(row)
+        print "Alert Profiles processing complete"
+        outfile4.close()
 
 def main():
     api_session = None
     api_session = create_api_session(api_session)
     get_users(api_session)
     list_groups(api_session)
-
-    #list_groups2(api_session)
+    policies_csv(api_session)
+    alert_profiles_csv(api_session)
 
 
 if __name__ == "__main__":
