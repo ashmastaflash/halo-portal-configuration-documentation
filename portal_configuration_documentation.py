@@ -16,6 +16,17 @@ try:
 except NameError:
     to_unicode = str
 
+def byteify(input):
+    if isinstance(input, dict):
+        return {byteify(key): byteify(value)
+                for key, value in input.iteritems()}
+    elif isinstance(input, list):
+        return [byteify(element) for element in input]
+    elif isinstance(input, unicode):
+        return input.encode('utf-8')
+    else:
+        return input
+
 
 def create_api_session(session):
     config_file_loc = "cloudpassage.yml"
@@ -43,6 +54,7 @@ def list_groups(session):
             group_counter += 1
             group_details_raw = groups.get("/v2/groups/" + group['id'])
             group_details = group_details_raw['group']
+            group_details = byteify(group_details)
             #print group_details
             if group_details['parent_id']:
                 group_parent_details = groups.get("/v2/groups/" + group_details['parent_id'])
@@ -73,7 +85,7 @@ def list_groups(session):
 
 
             if group_details['fim_policies']:
-                if len(group_details['fim_policies']) > 1:
+                if len(group_details['fim_policies']) > 0:
                     for fim_policies in group_details['fim_policies']:
                         fim_policies_details = fim_policies_details + fim_policies['name'] + "; "
                 else:
@@ -98,7 +110,7 @@ def list_groups(session):
                     if lids_policies_details and "; " not in lids_policies_details:
                         lids_policies_details = lids_policies_details + "; "
                     for lids_policies in group_details['inherited_lids_policies']:
-                        lids_policies_details = lids_policies_details + "(Inherited) " + lids_policies['name'].encode('utf-8').strip() + "; "
+                        lids_policies_details = lids_policies_details + "(Inherited) " + lids_policies['name'].strip() + "; "
 
 
             if group_details['alert_profiles']:
@@ -119,7 +131,7 @@ def list_groups(session):
 
 
 
-            row="{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format(str(group_details['name']).encode('utf-8').strip(), str(group_details['tag']).encode('utf-8').strip(),str(group_parent_name).encode('utf-8').strip(), str(group_details['has_children']).encode('utf-8').strip(), fw_policies_details, csm_policies_details, fim_policies_details, lids_policies_details, alert_profile_details, se_policies_details)
+            row="{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format(str(group_details['name']).encode("ascii", "ignore").strip(), str(group_details['tag']).encode("ascii", "ignore").strip(),str(group_parent_name).encode("ascii", "ignore").strip(), str(group_details['has_children']).encode('utf-8').strip(), fw_policies_details, csm_policies_details, fim_policies_details, lids_policies_details, alert_profile_details, se_policies_details)
             outfile.write(row)
         print "Processing of Groups Data Complete"
         outfile.close()
@@ -155,7 +167,8 @@ def policies_csv(session):
     list_of_csm_policies = get_policies.get_paginated("/v1/policies", "policies", 10)
     list_of_lids_policies = get_policies.get_paginated("/v1/lids_policies", "lids_policies", 10)
     list_of_fim_policies = get_policies.get_paginated("/v1/fim_policies", "fim_policies", 10)
-    total_policies = len(list_of_csm_policies) + len(list_of_lids_policies) + len(list_of_fim_policies)
+    list_of_fw_policies = get_policies.get_paginated("/v1/firewall_policies", "firewall_policies", 10)
+    total_policies = len(list_of_csm_policies) + len(list_of_lids_policies) + len(list_of_fim_policies) + len(list_of_fw_policies)
     policy_counter = 1
     with open('policies.csv', 'w') as outfile3:
         outfile3.write("Policy Type,Policy Name,Platform,Group Owner,Shared,Used By, Created by,Created,Updated by,Updated\n")
@@ -172,15 +185,26 @@ def policies_csv(session):
             outfile3.write(row)
         for policy in list_of_lids_policies:
             print "Processing Policy {0} of {1}".format(policy_counter, total_policies)
+            print policy
             policy_counter += 1
             used_by_group =""
             if "used_by" in policy:
                 policy_applied_groups = policy['used_by']
                 for policy_group in policy_applied_groups:
                     used_by_group += policy_group['name'] + ";"
-            row = "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format(policy['module'], policy['name'].replace(",","").encode('utf-8').strip(), policy['platform'], policy['group_name'].encode('utf-8').strip(), policy['shared'], used_by_group.encode('utf-8').strip(), policy['created_by'].encode('utf-8').strip(), policy['created_at'].encode('utf-8').strip(), policy['updated_by'].encode('utf-8').strip(), policy['updated_at'].encode('utf-8').strip()  )
+            row = "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format(policy['module'], policy['name'].replace(",","").encode('utf-8').strip(), policy['platform'], policy['group_name'].encode('utf-8').strip(), policy['shared'], used_by_group.encode('utf-8').strip(), policy['created_by'], policy['created_at'].encode('utf-8').strip(), policy['updated_by'], policy['updated_at'].encode('utf-8').strip()  )
             outfile3.write(row)
         for policy in list_of_fim_policies:
+            print "Processing Policy {0} of {1}".format(policy_counter, total_policies)
+            policy_counter += 1
+            used_by_group =""
+            if "used_by" in policy:
+                policy_applied_groups = policy['used_by']
+                for policy_group in policy_applied_groups:
+                    used_by_group += policy_group['name'] + ";"
+            row = "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format(policy['module'], policy['name'].replace(",",""), policy['platform'], policy['group_name'], policy['shared'], used_by_group, policy['created_by'], policy['created_at'], policy['updated_by'], policy['updated_at']  )
+            outfile3.write(row)
+        for policy in list_of_fw_policies:
             print "Processing Policy {0} of {1}".format(policy_counter, total_policies)
             policy_counter += 1
             used_by_group =""
