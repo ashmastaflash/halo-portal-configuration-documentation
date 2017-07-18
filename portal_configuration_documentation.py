@@ -185,7 +185,6 @@ def policies_csv(session):
             outfile3.write(row)
         for policy in list_of_lids_policies:
             print "Processing Policy {0} of {1}".format(policy_counter, total_policies)
-            print policy
             policy_counter += 1
             used_by_group =""
             if "used_by" in policy:
